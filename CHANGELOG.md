@@ -1,5 +1,10 @@
 # change logs
 
+## v0.0.6
+
+ - remove unnecessary files
+
+
 ## v0.0.5
 
  - test validate codes

@@ -1,0 +1,17 @@
+{
+  "name": "@plotdb/test-suite",
+  "version": "0.0.3",
+  "description": "",
+  "main": "dist/index.js",
+  "files": ["dist/**/*"],
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "zbryikt",
+  "license": "private",
+  "private": true,
+  "dependencies": {
+    "fedep": "^1.4.3"
+  }
+}

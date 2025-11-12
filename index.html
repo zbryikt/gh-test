@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>裝置傾斜方向顯示器</title>
+    <!-- 載入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 設定主字體為 Inter，確保中文顯示良好 */
+        body { font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", "Microsoft JhengHei", "PingFang TC", "Noto Sans TC"; }
+
+        /* 讓旋轉方塊居中並設置 3D 視角 */
+        .sensor-container {
+            perspective: 1000px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 300px;
+        }
+
+        /* 旋轉方塊的樣式 */
+        #tiltBox {
+            width: 150px;
+            height: 150px;
+            background-color: #3b82f6; /* 藍色 */
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5);
+            transition: box-shadow 0.3s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.25rem;
+            /* 讓變形在 3D 空間中執行 */
+            transform-style: preserve-3d;
+        }
+
+        /* 標籤顯示樣式 */
+        .value-label {
+            width: 100%;
+            text-align: center;
+            padding: 0.5rem 0;
+            border-radius: 0.5rem;
+            background-color: #1f2937; /* 深灰 */
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen p-4 flex flex-col items-center">
+
+    <div class="max-w-4xl w-full">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-extrabold text-blue-400 mb-2">裝置傾斜感測器</h1>
+            <p class="text-gray-400">請傾斜您的裝置以觀察數值和方塊的變化。</p>
+        </header>
+
+        <!-- 許可請求區塊 -->
+        <div id="permissionArea" class="bg-gray-800 p-6 rounded-xl shadow-2xl mb-8 text-center">
+            <p class="text-yellow-400 mb-4">在 iOS 裝置上，您需要授予權限才能讀取感測器數據。</p>
+            <button id="requestPermissionButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-150 shadow-md">
+                點擊以啟用感測器
+            </button>
+            <p id="statusMessage" class="mt-4 text-green-400 hidden">感測器已啟用！</p>
+        </div>
+
+        <!-- 數值顯示與視覺化區塊 -->
+        <div id="sensorDataArea" class="grid md:grid-cols-2 gap-8">
+            
+            <!-- 視覺化方塊 -->
+            <div class="bg-gray-800 p-6 rounded-xl shadow-xl">
+                <h2 class="text-2xl font-semibold mb-4 text-center">3D 視覺化</h2>
+                <div class="sensor-container">
+                    <div id="tiltBox">
+                        <span class="text-lg">感測器</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 數值顯示 -->
+            <div class="bg-gray-800 p-6 rounded-xl shadow-xl flex flex-col space-y-4">
+                <h2 class="text-2xl font-semibold mb-2 text-center">傾斜數值 (角度)</h2>
+                
+                <div class="value-label">
+                    <div class="text-sm font-light text-gray-400">Alpha (α) - 繞 Z 軸旋轉 (羅盤方向)</div>
+                    <div id="alphaValue" class="text-3xl font-mono text-pink-400">0.00°</div>
+                </div>
+
+                <div class="value-label">
+                    <div class="text-sm font-light text-gray-400">Beta (β) - 繞 X 軸旋轉 (前後傾斜)</div>
+                    <div id="betaValue" class="text-3xl font-mono text-teal-400">0.00°</div>
+                </div>
+
+                <div class="value-label">
+                    <div class="text-sm font-light text-gray-400">Gamma (γ) - 繞 Y 軸旋轉 (左右傾斜)</div>
+                    <div id="gammaValue" class="text-3xl font-mono text-yellow-400">0.00°</div>
+                </div>
+                
+                <p id="errorDisplay" class="text-red-500 mt-4 text-center hidden">感測器錯誤：不支援或發生問題。</p>
+            </div>
+        </div>
+
+    </div>
+
+    <footer class="mt-8 text-gray-500 text-sm text-center">
+        <p>請確保您的裝置支援 Device Orientation API。</p>
+    </footer>
+
+    <script>
+        // 設定常數來儲存 DOM 元素
+        const alphaDisplay = document.getElementById('alphaValue');
+        const betaDisplay = document.getElementById('betaValue');
+        const gammaDisplay = document.getElementById('gammaValue');
+        const tiltBox = document.getElementById('tiltBox');
+        const permissionButton = document.getElementById('requestPermissionButton');
+        const permissionArea = document.getElementById('permissionArea');
+        const statusMessage = document.getElementById('statusMessage');
+        const errorDisplay = document.getElementById('errorDisplay');
+
+        /**
+         * 將數值格式化為帶有兩位小數的字串。
+         * @param {number} value - 原始數值。
+         * @returns {string} - 格式化後的字串。
+         */
+        function formatValue(value) {
+            if (typeof value === 'number') {
+                return value.toFixed(2) + '°';
+            }
+            return 'N/A';
+        }
+
+        /**
+         * 處理裝置方向事件並更新 UI。
+         * @param {DeviceOrientationEvent} event - 裝置方向事件物件。
+         */
+        function handleOrientation(event) {
+            // 讀取 alpha (z軸)、beta (x軸) 和 gamma (y軸)
+            const alpha = event.alpha;
+            const beta = event.beta;
+            const gamma = event.gamma;
+
+            // 更新數值顯示
+            alphaDisplay.textContent = formatValue(alpha);
+            betaDisplay.textContent = formatValue(beta);
+            gammaDisplay.textContent = formatValue(gamma);
+
+            // 更新視覺化方塊的旋轉 (使用 beta 和 gamma)
+            // beta 控制繞 X 軸 (pitch)，gamma 控制繞 Y 軸 (roll)
+            // 使用 CSS transform 來實現 3D 旋轉效果
+            // 限制旋轉角度，避免過度翻轉
+            const limitedBeta = Math.max(-90, Math.min(90, beta || 0));
+            const limitedGamma = Math.max(-90, Math.min(90, gamma || 0));
+
+            // 注意：這裡我們將 beta 應用到 X 軸，將 gamma 應用到 Y 軸
+            // 負號是為了在視覺上匹配手機的實際傾斜方向
+            tiltBox.style.transform = `rotateX(${limitedBeta}deg) rotateY(${-limitedGamma}deg)`;
+        }
+
+        /**
+         * 處理 iOS/Safari 的權限請求。
+         */
+        async function requestDeviceOrientationPermission() {
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                // 這是 iOS 13+ 裝置的處理方式
+                try {
+                    const permissionState = await DeviceOrientationEvent.requestPermission();
+                    if (permissionState === 'granted') {
+                        window.addEventListener('deviceorientation', handleOrientation);
+                        permissionArea.classList.add('hidden');
+                        statusMessage.classList.remove('hidden');
+                        console.log('裝置方向感測器權限已授予。');
+                    } else {
+                        // 權限被使用者拒絕
+                        errorDisplay.textContent = '權限被拒絕。請檢查 iOS 設定：設定 > 瀏覽器名稱 > 動作與方向存取。';
+                        errorDisplay.classList.remove('hidden');
+                        permissionButton.disabled = true; // 禁用按鈕以避免重複點擊失敗
+                    }
+                } catch (error) {
+                    console.error('請求權限錯誤:', error);
+                    permissionButton.disabled = true;
+                    
+                    let message = `請求感測器權限失敗: ${error.message}`;
+
+                    // 檢查是否是 iFrame 引起的 Feature Policy 錯誤
+                    if (error.message.includes('Third-party iframes are not allowed access') || error.message.includes('Permission must be requested from the top-level')) {
+                         message = '⚠️ 權限請求失敗：由於此網頁目前在 iFrame (嵌入框架) 中執行，存取感測器已被瀏覽器安全政策 (Permissions Policy/Feature Policy) 限制。請將此網頁獨立開啟到新的瀏覽器標籤頁中進行測試。';
+                    } else {
+                        // 否則，顯示通用的權限拒絕訊息
+                        message = '權限被拒絕。請檢查 iOS 設定：設定 > 瀏覽器名稱 > 動作與方向存取。';
+                    }
+
+                    errorDisplay.textContent = message;
+                    errorDisplay.classList.remove('hidden');
+                }
+            } else {
+                // 對於非 iOS 裝置或其他支援 Device Orientation Event 的瀏覽器
+                if ('ondeviceorientation' in window) {
+                    window.addEventListener('deviceorientation', handleOrientation);
+                    permissionArea.classList.add('hidden');
+                    statusMessage.textContent = '感測器已啟用 (無需權限請求)！';
+                    statusMessage.classList.remove('hidden');
+                    console.log('裝置方向感測器已直接啟用。');
+                } else {
+                    // 如果裝置不支援
+                    errorDisplay.textContent = '您的裝置不支援 Device Orientation API。';
+                    errorDisplay.classList.remove('hidden');
+                    permissionArea.classList.add('hidden'); // 隱藏按鈕，因為無法使用
+                    console.error('裝置不支援 Device Orientation API。');
+                }
+            }
+        }
+
+        // 監聽按鈕點擊事件，觸發權限請求
+        permissionButton.addEventListener('click', requestDeviceOrientationPermission);
+
+        // 初始化檢查：如果不是 iOS/Safari，可以嘗試直接啟用 (但仍需使用者點擊來觸發)
+        // 為了通用性，我們讓使用者點擊按鈕來啟動整個流程
+        // 如果瀏覽器不需要明確的 requestPermission()，它會在點擊時直接加載監聽器
+        
+        // 頁面加載完成時，如果確定不是 iOS/Safari，則可以將按鈕變為一般的啟動按鈕
+        window.onload = () => {
+             if (!(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function')) {
+                // 非 iOS 裝置，修改按鈕文字
+                permissionButton.textContent = '點擊以啟動感測器';
+            }
+            // 檢查基本支援性並在控制台列印
+            if (!('ondeviceorientation' in window)) {
+                 errorDisplay.textContent = '您的裝置不支援 Device Orientation API。';
+                 errorDisplay.classList.remove('hidden');
+                 permissionArea.classList.add('hidden');
+            }
+        };
+
+    </script>
+</body>
+</html>
